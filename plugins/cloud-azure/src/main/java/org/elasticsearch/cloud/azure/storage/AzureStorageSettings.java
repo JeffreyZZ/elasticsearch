@@ -78,8 +78,8 @@ public class AzureStorageSettings {
      * @param settings settings to parse
      * @return A tuple with v1 = primary storage and v2 = secondary storage
      */
-    public static Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> parse(Settings settings) {
-        AzureStorageSettings primaryStorage = null;
+    public static Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> parse(Settings settings) {
+        Map<String, AzureStorageSettings> primaryStorage = new HashMap<>();
         Map<String, AzureStorageSettings> secondaryStorage = new HashMap<>();
 
         // We check for deprecated settings
@@ -91,7 +91,7 @@ public class AzureStorageSettings {
         if (account != null) {
             logger.warn("[{}] and [{}] have been deprecated. Use now [{}xxx.account] and [{}xxx.key] where xxx is any name",
                     Storage.ACCOUNT_DEPRECATED, Storage.KEY_DEPRECATED, Storage.PREFIX, Storage.PREFIX);
-            primaryStorage = new AzureStorageSettings(null, account, key, globalTimeout);
+            primaryStorage.put(key, new AzureStorageSettings(null, account, key, globalTimeout));
         } else {
             Settings storageSettings = settings.getByPrefix(Storage.PREFIX);
             if (storageSettings != null) {
@@ -105,12 +105,7 @@ public class AzureStorageSettings {
                         String activeStr = map.get("default");
                         boolean activeByDefault = activeStr == null ? false : Boolean.parseBoolean(activeStr);
                         if (activeByDefault) {
-                            if (primaryStorage == null) {
-                                primaryStorage = current;
-                            } else {
-                                logger.warn("default storage settings has already been defined. You can not define it to [{}]", storage.getKey());
-                                secondaryStorage.put(storage.getKey(), current);
-                            }
+                            primaryStorage.put(storage.getKey(), current);
                         } else {
                             secondaryStorage.put(storage.getKey(), current);
                         }
@@ -123,10 +118,10 @@ public class AzureStorageSettings {
                     // If the user defined only one storage account, that's fine. We know it's the default one.
                     if (secondaryStorage.size() > 1) {
                         logger.warn("no default storage settings has been defined. " +
-                                "Add \"default\": true to the settings you want to activate by default. " +
-                                "Forcing default to [{}].", fallback.getKey());
+                            "Add \"default\": true to the settings you want to activate by default. " +
+                            "Forcing default to [{}].", fallback.getKey());
                     }
-                    primaryStorage = fallback.getValue();
+                    primaryStorage.put(fallback.getKey(), fallback.getValue());
                     secondaryStorage.remove(fallback.getKey());
                 }
             }

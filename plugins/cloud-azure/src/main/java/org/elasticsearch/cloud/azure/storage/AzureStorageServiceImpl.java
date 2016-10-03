@@ -43,7 +43,7 @@ import java.util.Map;
 public class AzureStorageServiceImpl extends AbstractLifecycleComponent<AzureStorageServiceImpl>
     implements AzureStorageService {
 
-    final AzureStorageSettings primaryStorageSettings;
+    final Map<String, AzureStorageSettings> primaryStorageSettings;
     final Map<String, AzureStorageSettings> secondariesStorageSettings;
 
     final Map<String, CloudBlobClient> clients;
@@ -52,7 +52,7 @@ public class AzureStorageServiceImpl extends AbstractLifecycleComponent<AzureSto
     public AzureStorageServiceImpl(Settings settings) {
         super(settings);
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
+        Tuple< Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
         this.primaryStorageSettings = storageSettings.v1();
         this.secondariesStorageSettings = storageSettings.v2();
 
@@ -96,9 +96,7 @@ public class AzureStorageServiceImpl extends AbstractLifecycleComponent<AzureSto
 
         // if account is not secondary, it's the primary
         if (azureStorageSettings == null) {
-            if (account == null || primaryStorageSettings.getName() == null || account.equals(primaryStorageSettings.getName())) {
-                azureStorageSettings = primaryStorageSettings;
-            }
+            azureStorageSettings = this.primaryStorageSettings.get(account);
         }
 
         if (azureStorageSettings == null) {
