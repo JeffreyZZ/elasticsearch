@@ -300,10 +300,10 @@ public class AzureStorageServiceImpl extends AbstractLifecycleComponent<AzureSto
     protected void doStart() throws ElasticsearchException {
         logger.debug("starting azure storage client instance");
 
-        // We register the primary client if any
-        if (primaryStorageSettings != null) {
-            logger.debug("registering primary client for account [{}]", primaryStorageSettings.getAccount());
-            createClient(primaryStorageSettings);
+        // We register the primary clients if any
+        for (Map.Entry<String, AzureStorageSettings> azureStorageSettingsEntry : primaryStorageSettings.entrySet()) {
+            logger.debug("registering primary client for account [{}]", azureStorageSettingsEntry.getKey());
+            createClient(azureStorageSettingsEntry.getValue());
         }
 
         // We register all secondary clients
