@@ -40,10 +40,11 @@ public class AzureSettingsParserTest extends LuceneTestCase {
                 .put("cloud.azure.storage.azure2.key", "mykey2")
                 .build();
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
-        assertThat(tuple.v1(), notNullValue());
-        assertThat(tuple.v1().getAccount(), is("myaccount1"));
-        assertThat(tuple.v1().getKey(), is("mykey1"));
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
+        assertThat(tuple.v1().keySet(), hasSize(1));
+        assertThat(tuple.v1().get("azure1"), notNullValue());
+        assertThat(tuple.v1().get("azure1").getAccount(), is("myaccount1"));
+        assertThat(tuple.v1().get("azure1").getKey(), is("mykey1"));
         assertThat(tuple.v2().keySet(), hasSize(1));
         assertThat(tuple.v2().get("azure2"), notNullValue());
         assertThat(tuple.v2().get("azure2").getAccount(), is("myaccount2"));
@@ -56,10 +57,11 @@ public class AzureSettingsParserTest extends LuceneTestCase {
                 .put("cloud.azure.storage.azure1.key", "mykey1")
                 .build();
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
-        assertThat(tuple.v1(), notNullValue());
-        assertThat(tuple.v1().getAccount(), is("myaccount1"));
-        assertThat(tuple.v1().getKey(), is("mykey1"));
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
+        assertThat(tuple.v1().keySet(), hasSize(1));
+        assertThat(tuple.v1().get("azure1"), notNullValue());
+        assertThat(tuple.v1().get("azure1").getAccount(), is("myaccount1"));
+        assertThat(tuple.v1().get("azure1").getKey(), is("mykey1"));
         assertThat(tuple.v2().keySet(), hasSize(0));
     }
 
@@ -69,10 +71,11 @@ public class AzureSettingsParserTest extends LuceneTestCase {
                 .put(Storage.KEY_DEPRECATED, "mykey1")
                 .build();
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
-        assertThat(tuple.v1(), notNullValue());
-        assertThat(tuple.v1().getAccount(), is("myaccount1"));
-        assertThat(tuple.v1().getKey(), is("mykey1"));
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
+        assertThat(tuple.v1().keySet(), hasSize(1));
+        assertThat(tuple.v1().get("azure1"), notNullValue());
+        assertThat(tuple.v1().get("azure1").getAccount(), is("myaccount1"));
+        assertThat(tuple.v1().get("azure1").getKey(), is("mykey1"));
         assertThat(tuple.v2().keySet(), hasSize(0));
     }
 
@@ -84,10 +87,11 @@ public class AzureSettingsParserTest extends LuceneTestCase {
                 .put("cloud.azure.storage.azure2.key", "mykey2")
                 .build();
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
-        assertThat(tuple.v1(), notNullValue());
-        assertThat(tuple.v1().getAccount(), is("myaccount1"));
-        assertThat(tuple.v1().getKey(), is("mykey1"));
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
+        assertThat(tuple.v1().keySet(), hasSize(1));
+        assertThat(tuple.v1().get("azure1"), notNullValue());
+        assertThat(tuple.v1().get("azure1").getAccount(), is("myaccount1"));
+        assertThat(tuple.v1().get("azure1").getKey(), is("mykey1"));
         assertThat(tuple.v2().keySet(), hasSize(1));
         assertThat(tuple.v2().get("azure2"), notNullValue());
         assertThat(tuple.v2().get("azure2").getAccount(), is("myaccount2"));
@@ -104,10 +108,11 @@ public class AzureSettingsParserTest extends LuceneTestCase {
                 .put("cloud.azure.storage.azure2.default", true)
                 .build();
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
-        assertThat(tuple.v1(), notNullValue());
-        assertThat(tuple.v1().getAccount(), is("myaccount1"));
-        assertThat(tuple.v1().getKey(), is("mykey1"));
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(settings);
+        assertThat(tuple.v1().keySet(), hasSize(1));
+        assertThat(tuple.v1().get("azure1"), notNullValue());
+        assertThat(tuple.v1().get("azure1").getAccount(), is("myaccount1"));
+        assertThat(tuple.v1().get("azure1").getKey(), is("mykey1"));
         assertThat(tuple.v2().keySet(), hasSize(1));
         assertThat(tuple.v2().get("azure2"), notNullValue());
         assertThat(tuple.v2().get("azure2").getAccount(), is("myaccount2"));
@@ -115,7 +120,7 @@ public class AzureSettingsParserTest extends LuceneTestCase {
     }
 
     public void testParseEmptySettings() {
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(Settings.EMPTY);
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> tuple = AzureStorageSettings.parse(Settings.EMPTY);
         assertThat(tuple.v1(), nullValue());
         assertThat(tuple.v2().keySet(), hasSize(0));
     }
