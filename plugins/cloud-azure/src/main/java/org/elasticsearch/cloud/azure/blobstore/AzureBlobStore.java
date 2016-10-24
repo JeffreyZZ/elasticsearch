@@ -30,6 +30,7 @@ import org.elasticsearch.common.blobstore.BlobStore;
 import org.elasticsearch.common.collect.MapBuilder;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.math.MathUtils;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.repositories.RepositoryName;
 import org.elasticsearch.repositories.RepositorySettings;
@@ -71,8 +72,7 @@ public class AzureBlobStore extends AbstractComponent implements BlobStore {
 
     private int getAccountHash(String blob, int numberOfAccounts) {
         int hash = this.hashCode(blob);
-        int mod = hash % numberOfAccounts;
-        return Math.abs(mod);
+        return MathUtils.mod(hash, numberOfAccounts);
     }
 
     /**
