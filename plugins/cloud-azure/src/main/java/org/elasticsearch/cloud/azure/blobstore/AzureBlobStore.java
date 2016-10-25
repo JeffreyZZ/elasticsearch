@@ -240,6 +240,6 @@ public class AzureBlobStore extends AbstractComponent implements BlobStore {
 
     public void moveBlob(String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException
     {
-        this.client.moveBlob(this.accountName, this.locMode, container, sourceBlob, targetBlob);
+        this.client.moveBlob(this.accountName, this.accountName,this.locMode, container, sourceBlob, targetBlob);
     }
 }
