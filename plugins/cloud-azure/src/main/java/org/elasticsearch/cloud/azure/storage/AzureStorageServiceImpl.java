@@ -288,8 +288,12 @@ public class AzureStorageServiceImpl extends AbstractLifecycleComponent<AzureSto
         CloudBlobClient client = this.getSelectedClient(account, mode);
         CloudBlobContainer blobContainer = client.getContainerReference(container);
         CloudBlockBlob blobSource = blobContainer.getBlockBlobReference(sourceBlob);
+
+        CloudBlobClient targetClient = this.getSelectedClient(targetAccount, mode);
+        CloudBlobContainer targetBlobContainer = targetClient.getContainerReference(container);
+        targetBlobContainer.createIfNotExists();
         if (blobSource.exists()) {
-            CloudBlockBlob blobTarget = blobContainer.getBlockBlobReference(targetBlob);
+            CloudBlockBlob blobTarget = targetBlobContainer.getBlockBlobReference(targetBlob);
             blobTarget.startCopy(blobSource);
             blobSource.delete();
             logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}] -> done", container, sourceBlob, targetBlob);
