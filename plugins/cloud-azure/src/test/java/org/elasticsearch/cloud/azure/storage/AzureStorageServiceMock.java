@@ -102,7 +102,7 @@ public class AzureStorageServiceMock extends AbstractLifecycleComponent<AzureSto
     }
 
     @Override
-    public void moveBlob(String account, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
+    public void moveBlob(String account, String targetAccount, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
         for (String blobName : blobs.keySet()) {
             if (endsWithIgnoreCase(blobName, sourceBlob)) {
                 ByteArrayOutputStream outputStream = blobs.get(blobName);
