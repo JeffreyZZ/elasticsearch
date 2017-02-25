@@ -21,6 +21,7 @@ package org.elasticsearch.cloud.azure.storage;
 
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.LocationMode;
+import com.microsoft.azure.storage.RetryExponentialRetry;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.BlobProperties;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
@@ -47,7 +48,7 @@ import java.util.Map;
 
 public class AzureStorageServiceImpl extends AbstractComponent implements AzureStorageService {
 
-    final AzureStorageSettings primaryStorageSettings;
+    final Map<String, AzureStorageSettings> primariesStorageSettings;
     final Map<String, AzureStorageSettings> secondariesStorageSettings;
 
     final Map<String, CloudBlobClient> clients;
@@ -55,18 +56,18 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     public AzureStorageServiceImpl(Settings settings) {
         super(settings);
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
-        this.primaryStorageSettings = storageSettings.v1();
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
+        this.primariesStorageSettings = storageSettings.v1();
         this.secondariesStorageSettings = storageSettings.v2();
 
         this.clients = new HashMap<>();
 
         logger.debug("starting azure storage client instance");
 
-        // We register the primary client if any
-        if (primaryStorageSettings != null) {
-            logger.debug("registering primary client for account [{}]", primaryStorageSettings.getAccount());
-            createClient(primaryStorageSettings);
+        // We register all primary clients
+        for (Map.Entry<String, AzureStorageSettings> azureStorageSettingsEntry : primariesStorageSettings.entrySet()) {
+            logger.debug("registering primary client for account [{}]", azureStorageSettingsEntry.getKey());
+            createClient(azureStorageSettingsEntry.getValue());
         }
 
         // We register all secondary clients
@@ -79,12 +80,19 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     void createClient(AzureStorageSettings azureStorageSettings) {
         try {
             logger.trace("creating new Azure storage client using account [{}], key [{}]",
+                azureStorageSettings.getAccount(), azureStorageSettings.getKey());
+
+            if (this.clients.containsKey(azureStorageSettings.getAccount()))
+            {
+                logger.trace("Azure storage client using account [{}], key [{}] exists.",
                     azureStorageSettings.getAccount(), azureStorageSettings.getKey());
+                return;
+            }
 
             String storageConnectionString =
-                    "DefaultEndpointsProtocol=https;"
-                            + "AccountName="+ azureStorageSettings.getAccount() +";"
-                            + "AccountKey=" + azureStorageSettings.getKey();
+                "DefaultEndpointsProtocol=https;"
+                    + "AccountName="+ azureStorageSettings.getAccount() +";"
+                    + "AccountKey=" + azureStorageSettings.getKey();
 
             // Retrieve storage account from connection-string.
             CloudStorageAccount storageAccount = CloudStorageAccount.parse(storageConnectionString);
@@ -103,7 +111,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
         logger.trace("selecting a client for account [{}], mode [{}]", account, mode.name());
         AzureStorageSettings azureStorageSettings = null;
 
-        if (this.primaryStorageSettings == null) {
+        if (this.primariesStorageSettings == null) {
             throw new IllegalArgumentException("No primary azure storage can be found. Check your elasticsearch.yml.");
         }
 
@@ -113,8 +121,8 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
 
         // if account is not secondary, it's the primary
         if (azureStorageSettings == null) {
-            if (Strings.hasLength(account) == false || primaryStorageSettings.getName() == null || account.equals(primaryStorageSettings.getName())) {
-                azureStorageSettings = primaryStorageSettings;
+            if (Strings.hasLength(account)) {
+                azureStorageSettings = this.primariesStorageSettings.get(account);
             }
         }
 
@@ -138,6 +146,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
             try {
                 int timeout = (int) azureStorageSettings.getTimeout().getMillis();
                 client.getDefaultRequestOptions().setTimeoutIntervalInMs(timeout);
+                client.getDefaultRequestOptions().setRetryPolicyFactory(new RetryExponentialRetry(1000 * 30, 7));
             } catch (ClassCastException e) {
                 throw new IllegalArgumentException("Can not convert [" + azureStorageSettings.getTimeout() +
                     "]. It can not be longer than 2,147,483,647ms.");
@@ -175,7 +184,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
             blobContainer.createIfNotExists();
         } catch (IllegalArgumentException e) {
             logger.trace((Supplier<?>) () -> new ParameterizedMessage("fails creating container [{}]", container), e);
-            throw new RepositoryException(container, e.getMessage(), e);
+            throw new RepositoryException(container, e.getMessage());
         }
     }
 
@@ -294,14 +303,19 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     }
 
     @Override
-    public void moveBlob(String account, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
-        logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}]", container, sourceBlob, targetBlob);
+    public void moveBlob(String account, String targetAccount, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
+        logger.debug("c [{}], sourceBlob [{}], targetBlob [{}]", container, sourceBlob, targetBlob);
 
         CloudBlobClient client = this.getSelectedClient(account, mode);
         CloudBlobContainer blobContainer = client.getContainerReference(container);
         CloudBlockBlob blobSource = blobContainer.getBlockBlobReference(sourceBlob);
+
+        CloudBlobClient targetClient = this.getSelectedClient(targetAccount, mode);
+        CloudBlobContainer targetBlobContainer = targetClient.getContainerReference(container);
+        targetBlobContainer.createIfNotExists();
+
         if (blobSource.exists()) {
-            CloudBlockBlob blobTarget = blobContainer.getBlockBlobReference(targetBlob);
+            CloudBlockBlob blobTarget = targetBlobContainer.getBlockBlobReference(targetBlob);
             blobTarget.startCopy(blobSource);
             blobSource.delete();
             logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}] -> done", container, sourceBlob, targetBlob);
