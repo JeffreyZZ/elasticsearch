@@ -23,6 +23,7 @@ import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.LocationMode;
 import com.microsoft.azure.storage.RetryExponentialRetry;
 import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.*;
 import com.microsoft.azure.storage.blob.BlobProperties;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
@@ -39,12 +40,19 @@ import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.repositories.RepositoryException;
 
+import java.lang.*;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.EnumSet;
+import java.util.GregorianCalendar;
+import java.util.TimeZone;
 
 public class AzureStorageServiceImpl extends AbstractComponent implements AzureStorageService {
 
@@ -304,7 +312,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
 
     @Override
     public void moveBlob(String account, String targetAccount, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
-        logger.debug("c [{}], sourceBlob [{}], targetBlob [{}]", container, sourceBlob, targetBlob);
+        logger.debug("container [{}], sourceBlob [{}], targetBlob [{}]", container, sourceBlob, targetBlob);
 
         CloudBlobClient client = this.getSelectedClient(account, mode);
         CloudBlobContainer blobContainer = client.getContainerReference(container);
@@ -315,8 +323,47 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
         targetBlobContainer.createIfNotExists();
 
         if (blobSource.exists()) {
+            // Create a new shared access policy.
+            SharedAccessBlobPolicy sharedAccessBlobPolicy = new SharedAccessBlobPolicy();
+            GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+            calendar.setTime(new Date());
+            sharedAccessBlobPolicy.setSharedAccessStartTime(calendar.getTime());
+            calendar.add(Calendar.HOUR, 1);
+            sharedAccessBlobPolicy.setSharedAccessExpiryTime(calendar.getTime());
+            sharedAccessBlobPolicy.setPermissions(EnumSet.of(SharedAccessBlobPermissions.READ));
+
+            // Create a shared access signature for source blob.
+            String sas = "";
+            try {
+                sas = blobSource.generateSharedAccessSignature(sharedAccessBlobPolicy, null);
+            }catch(Exception ex) {
+                logger.error("Failed to generate SAS for source blob [{}]", sourceBlob);
+                throw new RepositoryException(container, "Failed to generate SAS for source blob [" + sourceBlob + "]");
+            }
+            URI newUri = new URI(blobSource.getUri() + "?" + sas);
+
+            // Start copying the source blob
             CloudBlockBlob blobTarget = targetBlobContainer.getBlockBlobReference(targetBlob);
-            blobTarget.startCopy(blobSource);
+            blobTarget.startCopy(newUri);
+
+            // Check the copy state
+            int retryCount = 10;
+            while (blobTarget.getCopyState().getStatus().equals(CopyStatus.PENDING)) {
+                try{
+                    Thread.sleep(300);
+                    logger.trace("Waiting for the copy state of target blob : [{}]", blobTarget.getCopyState().getStatus());
+                    blobTarget.downloadAttributes();
+                } catch(Exception ex) {
+                    logger.warn("Error while waiting and downloading blob attributes.", ex);
+                }
+                retryCount--;
+                if (retryCount < 0)
+                {
+                    throw new RepositoryException(container, "Failed to copy blob [" + sourceBlob + "] of [" + account + "] to blob [" + targetBlob + "] of [" + targetAccount + "]");
+                }
+            }
+
+            // Delete source blob
             blobSource.delete();
             logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}] -> done", container, sourceBlob, targetBlob);
         }

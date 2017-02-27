@@ -229,13 +229,11 @@ public class AzureBlobStore extends AbstractComponent implements BlobStore {
         return blobsBuilder.immutableMap();
     }
 
-    public void moveBlob(String container, String sourceBlob, String targetBlob, String keyPath) throws URISyntaxException, StorageException
+    public void moveBlob(String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException
     {
         String sourceAccount = this.getAccount(sourceBlob);
         String targetAccount = this.getAccount(targetBlob);
 
-        String source = keyPath + sourceBlob;
-        String target = keyPath + targetBlob;
-        this.client.moveBlob(sourceAccount, targetAccount,this.locMode, container, source, target);
+        this.client.moveBlob(sourceAccount, targetAccount, this.locMode, container, sourceBlob, targetBlob);
     }
 }

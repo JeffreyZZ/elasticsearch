@@ -140,12 +140,16 @@ public class AzureBlobContainer extends AbstractBlobContainer {
     @Override
     public void move(String sourceBlobName, String targetBlobName) throws IOException {
         logger.trace("move({}, {})", sourceBlobName, targetBlobName);
-        try {
-            logger.debug("moving blob [{}] to [{}] in container {{}}", sourceBlobName, targetBlobName, blobStore.container());
 
-            blobStore.moveBlob(blobStore.container(), sourceBlobName, targetBlobName, keyPath);
+        String source = keyPath + sourceBlobName;
+        String target = keyPath + targetBlobName;
+
+        try {
+            logger.debug("moving blob [{}] to [{}] in container {{}}", source, target, blobStore.container());
+
+            blobStore.moveBlob(blobStore.container(), source, target);
         } catch (URISyntaxException | StorageException e) {
-            logger.warn("can not move blob [{}] to [{}] in container {{}}: {}", sourceBlobName, targetBlobName, blobStore.container(), e.getMessage());
+            logger.warn("can not move blob [{}] to [{}] in container {{}}: {}", source, target, blobStore.container(), e.getMessage());
             throw new IOException(e);
         }
     }
