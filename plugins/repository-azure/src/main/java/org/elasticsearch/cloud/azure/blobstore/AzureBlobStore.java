@@ -115,6 +115,13 @@ public class AzureBlobStore extends AbstractComponent implements BlobStore {
         return container;
     }
 
+    /**
+     * Gets the configured {@link LocationMode} for the Azure storage requests.
+     */
+    public LocationMode getLocationMode() {
+       return this.locMode;
+    }
+
     @Override
     public BlobContainer blobContainer(BlobPath path) {
         return new AzureBlobContainer(repositoryName, path, this);
