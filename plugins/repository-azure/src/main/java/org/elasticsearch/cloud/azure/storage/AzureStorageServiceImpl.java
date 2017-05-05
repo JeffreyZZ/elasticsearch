@@ -323,19 +323,19 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
         targetBlobContainer.createIfNotExists();
 
         if (blobSource.exists()) {
-            // Create a new shared access policy.
-            SharedAccessBlobPolicy sharedAccessBlobPolicy = new SharedAccessBlobPolicy();
             GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
             calendar.setTime(new Date());
-            sharedAccessBlobPolicy.setSharedAccessStartTime(calendar.getTime());
-            calendar.add(Calendar.HOUR, 1);
-            sharedAccessBlobPolicy.setSharedAccessExpiryTime(calendar.getTime());
-            sharedAccessBlobPolicy.setPermissions(EnumSet.of(SharedAccessBlobPermissions.READ));
+            calendar.add(Calendar.MINUTE, 15);
+
+            // Create a new shared access blob policy.
+            SharedAccessBlobPolicy policy = new SharedAccessBlobPolicy();
+            policy.setSharedAccessExpiryTime(calendar.getTime());
+            policy.setPermissions(EnumSet.of(SharedAccessBlobPermissions.READ));
 
             // Create a shared access signature for source blob.
             String sas = "";
             try {
-                sas = blobSource.generateSharedAccessSignature(sharedAccessBlobPolicy, null);
+                sas = blobSource.generateSharedAccessSignature(policy, null, null);
             }catch(Exception ex) {
                 logger.error("Failed to generate SAS for source blob [{}]", sourceBlob);
                 throw new RepositoryException(container, "Failed to generate SAS for source blob [" + sourceBlob + "]");
