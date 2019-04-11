@@ -24,11 +24,13 @@ import com.microsoft.azure.storage.LocationMode;
 import com.microsoft.azure.storage.RetryExponentialRetry;
 import com.microsoft.azure.storage.RetryPolicy;
 import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.*;
 import com.microsoft.azure.storage.blob.BlobProperties;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
 import com.microsoft.azure.storage.blob.ListBlobItem;
+import com.microsoft.azure.storage.blob.SharedAccessBlobPermissions;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.common.Strings;
@@ -40,16 +42,22 @@ import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.repositories.RepositoryException;
 
+import java.lang.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Calendar;
+import java.util.EnumSet;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class AzureStorageServiceImpl extends AbstractComponent implements AzureStorageService {
 
-    final AzureStorageSettings primaryStorageSettings;
+    final Map<String, AzureStorageSettings> primariesStorageSettings;
     final Map<String, AzureStorageSettings> secondariesStorageSettings;
 
     final Map<String, CloudBlobClient> clients;
@@ -57,17 +65,18 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     public AzureStorageServiceImpl(Settings settings) {
         super(settings);
 
-        Tuple<AzureStorageSettings, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
-        this.primaryStorageSettings = storageSettings.v1();
+        Tuple<Map<String, AzureStorageSettings>, Map<String, AzureStorageSettings>> storageSettings = AzureStorageSettings.parse(settings);
+        this.primariesStorageSettings = storageSettings.v1();
         this.secondariesStorageSettings = storageSettings.v2();
 
         this.clients = new HashMap<>();
 
         logger.debug("starting azure storage client instance");
 
-        // We register the primary client if any
-        if (primaryStorageSettings != null) {
-            createClient(primaryStorageSettings);
+        // We register all primary clients if any
+        for (Map.Entry<String, AzureStorageSettings> azureStorageSettingsEntry : primariesStorageSettings.entrySet()) {
+            logger.debug("registering primary client for account [{}]", azureStorageSettingsEntry.getKey());
+            createClient(azureStorageSettingsEntry.getValue());
         }
 
         // We register all secondary clients
@@ -78,6 +87,16 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
 
     void createClient(AzureStorageSettings azureStorageSettings) {
         try {
+            logger.trace("creating new Azure storage client using account [{}], key [{}]",
+                azureStorageSettings.getAccount(), azureStorageSettings.getKey());
+
+            if (this.clients.containsKey(azureStorageSettings.getAccount()))
+            {
+                logger.trace("Azure storage client using account [{}], key [{}] exists.",
+                    azureStorageSettings.getAccount(), azureStorageSettings.getKey());
+                return;
+            }
+
             String storageConnectionString =
                     "DefaultEndpointsProtocol=https;"
                             + "AccountName="+ azureStorageSettings.getAccount() +";"
@@ -99,7 +118,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     CloudBlobClient getSelectedClient(String account, LocationMode mode) {
         AzureStorageSettings azureStorageSettings = null;
 
-        if (this.primaryStorageSettings == null) {
+        if (this.primariesStorageSettings == null) {
             throw new IllegalArgumentException("No primary azure storage can be found. Check your elasticsearch.yml.");
         }
 
@@ -109,14 +128,12 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
 
         // if account is not secondary, it's the primary
         if (azureStorageSettings == null) {
-            if (Strings.hasLength(account) == false || primaryStorageSettings.getName() == null || account.equals(primaryStorageSettings.getName())) {
-                azureStorageSettings = primaryStorageSettings;
-            }
+            azureStorageSettings = this.primariesStorageSettings.get(account);
         }
 
         if (azureStorageSettings == null) {
             // We did not get an account. That's bad.
-            throw new IllegalArgumentException("Can not find azure account. Check your elasticsearch.yml.");
+            throw new IllegalArgumentException("Can not find azure account " + account + ". Check your elasticsearch.yml.");
         }
 
         CloudBlobClient client = this.clients.get(azureStorageSettings.getAccount());
@@ -288,15 +305,58 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
     }
 
     @Override
-    public void moveBlob(String account, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
+    public void moveBlob(String account, String targetAccount, LocationMode mode, String container, String sourceBlob, String targetBlob) throws URISyntaxException, StorageException {
         logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}]", container, sourceBlob, targetBlob);
 
         CloudBlobClient client = this.getSelectedClient(account, mode);
         CloudBlobContainer blobContainer = client.getContainerReference(container);
         CloudBlockBlob blobSource = blobContainer.getBlockBlobReference(sourceBlob);
+
+        CloudBlobClient targetClient = this.getSelectedClient(targetAccount, mode);
+        CloudBlobContainer targetBlobContainer = targetClient.getContainerReference(container);
+        targetBlobContainer.createIfNotExists();
+
         if (blobSource.exists()) {
+            GregorianCalendar calendar = new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+            calendar.setTime(new Date());
+            calendar.add(Calendar.MINUTE, 15);
+
+            // Create a new shared access blob policy
+            SharedAccessBlobPolicy policy = new SharedAccessBlobPolicy();
+            policy.setSharedAccessExpiryTime(calendar.getTime());
+            policy.setPermissions(EnumSet.of(SharedAccessBlobPermissions.READ));
+
+            // Create a shared access signature for source blob
+            String sas = "";
+            try{
+                sas = blobSource.generateSharedAccessSignature(policy, null, null);
+            }catch (Exception ex){
+                logger.error("Failed to generate SAS for source blob [{}]", sourceBlob);
+                throw new RepositoryException(container, "Failed to generate SAS for source blob [" + sourceBlob + "]");
+            }
+            URI newUri = new URI(blobSource.getUri() + "?" + sas);
+
+            // Start copying the source blob
             CloudBlockBlob blobTarget = blobContainer.getBlockBlobReference(targetBlob);
-            blobTarget.startCopy(blobSource);
+            blobTarget.startCopy(newUri);
+
+            // Check the copy state
+            int retryCount = 10;
+            while(blobTarget.getCopyState().getStatus().equals(CopyStatus.PENDING)){
+                try{
+                    Thread.sleep(300);
+                    logger.trace("Waiting for the copy state of target blob : [{}]", blobTarget.getCopyState().getStatus());
+                    blobTarget.downloadAttributes();
+                }catch(Exception ex){
+                    logger.warn("Error while waiting and downloading blob attributes.", ex);
+                }
+                retryCount--;
+                if (retryCount <= 0) {
+                    throw new RepositoryException(container, "Failed to copy blob [" + sourceBlob + "] of [" + account + "] to blob [" + targetBlob + "] of [" + targetAccount + "]");
+                }
+            }
+
+            // Delete source blob
             blobSource.delete();
             logger.debug("moveBlob container [{}], sourceBlob [{}], targetBlob [{}] -> done", container, sourceBlob, targetBlob);
         }
