@@ -194,7 +194,7 @@ public class AzureBlobStore extends AbstractComponent implements BlobStore {
     {
         final String[] accounts = this.getAccounts();
         if (accounts.length == 0) {
-            this.client.deleteFiles(this.accountName, this.locMode, container, path);
+            this.client.deleteFiles(null, this.locMode, container, path);
         }else{
             for (String account : accounts) {
                 this.client.deleteFiles(account, this.locMode, container, path);

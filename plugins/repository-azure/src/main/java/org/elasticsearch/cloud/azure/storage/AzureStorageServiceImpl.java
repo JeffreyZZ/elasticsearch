@@ -337,7 +337,7 @@ public class AzureStorageServiceImpl extends AbstractComponent implements AzureS
             URI newUri = new URI(blobSource.getUri() + "?" + sas);
 
             // Start copying the source blob
-            CloudBlockBlob blobTarget = blobContainer.getBlockBlobReference(targetBlob);
+            CloudBlockBlob blobTarget = targetBlobContainer.getBlockBlobReference(targetBlob);
             blobTarget.startCopy(newUri);
 
             // Check the copy state
